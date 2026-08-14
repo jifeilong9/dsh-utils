@@ -84,7 +84,10 @@ const zh = {
   filesSelectWorkspace: "选择工作区",
   filesNewFile: "新建文件",
   filesNewFileName: "输入文件名…",
+  filesNewFolder: "新建文件夹",
+  filesNewFolderName: "输入文件夹名…",
   filesCreate: "创建",
+  filesCreateFolder: "创建文件夹",
 };
 
 const en = {
@@ -116,7 +119,10 @@ const en = {
   filesSelectWorkspace: "Select workspace",
   filesNewFile: "New file",
   filesNewFileName: "Enter a file name…",
+  filesNewFolder: "New folder",
+  filesNewFolderName: "Enter a folder name…",
   filesCreate: "Create",
+  filesCreateFolder: "Create folder",
 };
 
 /** Passthrough wire codec (the strict registry only requires parse()). */
@@ -131,6 +137,28 @@ function jsonParam(name, acceptsUndefined = false) {
     ...(acceptsUndefined ? { acceptsUndefined: true } : {}),
     codec: { mode: "strict", typeSymbol: "dsh-utils#" + name, schema: PASS_SCHEMA },
   };
+}
+
+/** 16×16 icon paths (octicons-style, fill currentColor) for the context menu. */
+const MENU_ICON_PATHS = {
+  file: "M2.75 1.5h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v8.586A1.75 1.75 0 0 1 12.25 16.5h-9.5A1.75 1.75 0 0 1 1 14.75v-11.5C1 2.285 1.785 1.5 2.75 1.5Zm0 1.5c-.138 0-.25.112-.25.25v11.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8 4.25V1.5H2.75Zm7.75 2.75v2h2.25a.25.25 0 0 0 .22-.13.247.247 0 0 0-.03-.257L11.657 3.81a.247.247 0 0 0-.257-.03.25.25 0 0 0-.13.22Z",
+  folder: "M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z",
+  plus: "M8.75 2.5a.75.75 0 0 0-1.5 0v4.75H2.5a.75.75 0 0 0 0 1.5h4.75v4.75a.75.75 0 0 0 1.5 0V8.75h4.75a.75.75 0 0 0 0-1.5H8.75V2.5Z",
+  terminal: "M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5Z",
+  trash: "M5.5 5.5A.75.75 0 0 0 4 5.5v7a.75.75 0 0 0 1.5 0v-7Zm3.5 0a.75.75 0 0 0-1.5 0v7a.75.75 0 0 0 1.5 0v-7ZM2.5 2a.75.75 0 0 0 0 1.5H3v9.75A1.75 1.75 0 0 0 4.75 15h6.5A1.75 1.75 0 0 0 13 13.25V3.5h.5a.75.75 0 0 0 0-1.5H10.5v-1A1.75 1.75 0 0 0 8.75-.25h-1.5A1.75 1.75 0 0 0 5.5 1v1H2.5ZM7 1a.25.25 0 0 1 .25-.25h1.5A.25.25 0 0 1 9 1v1H7V1Zm4.5 2.5h-7v9.75c0 .138.112.25.25.25h6.5a.25.25 0 0 0 .25-.25V3.5Z",
+};
+
+/** Render one context-menu icon: a base shape plus an optional "+" badge. */
+function menuIcon(name, withAdd) {
+  const children = [React.createElement("path", { fill: "currentColor", d: MENU_ICON_PATHS[name] })];
+  if (withAdd) {
+    children.push(React.createElement("path", {
+      fill: "currentColor",
+      d: MENU_ICON_PATHS.plus,
+      transform: "translate(9 9) scale(0.42)",
+    }));
+  }
+  return React.createElement("svg", { viewBox: "0 0 16 16", className: "dsh-utils-files-menu-item-icon", "aria-hidden": "true" }, children);
 }
 
 /** The workspaceFiles Remote namespace's client contribution. */
@@ -176,6 +204,16 @@ const WORKSPACE_FILES_REMOTE = {
       parameters: [jsonParam("root"), jsonParam("rel"), jsonParam("content"), jsonParam("baseMtime", true)],
       cancellation: { parameter: "signal" },
       result: { mode: "strict", typeSymbol: "dsh-utils#WriteResult", schema: PASS_SCHEMA },
+    },
+    {
+      id: "dsh-utils#workspaceFiles/createDir",
+      service: "workspaceFiles",
+      namespace: "workspaceFiles",
+      method: "createDir",
+      invocation: { kind: "direct" },
+      parameters: [jsonParam("root"), jsonParam("rel")],
+      cancellation: { parameter: "signal" },
+      result: { mode: "strict", typeSymbol: "dsh-utils#CreateDirResult", schema: PASS_SCHEMA },
     },
     {
       id: "dsh-utils#workspaceFiles/delete",
@@ -252,7 +290,6 @@ const STYLES = [
   ".dsh-utils-files-tool{padding:0;width:28px;height:28px;border-radius:8px;border:none;",
   "background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;line-height:28px;}",
   ".dsh-utils-files-tool:hover{background:var(--dsw-alias-interactive-bg-hover);}",
-  ".dsh-utils-files-tool svg{width:16px;height:16px;display:block;margin:6px auto;}",
   ".dsh-utils-files-search{padding:8px 14px 0;flex:none;}",
   ".dsh-utils-files-search input{width:100%;height:30px;padding:0 10px;border-radius:8px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input);",
@@ -290,31 +327,45 @@ const STYLES = [
   "background:var(--dsw-alias-interactive-bg-active);}",
   ".dsh-utils-files-row[draggable=\"true\"]{cursor:grab;}",
   ".dsh-utils-files-row[draggable=\"true\"]:active{cursor:grabbing;}",
-  // context menu
+  // context menu (icon rows with group separators)
   ".dsh-utils-files-menu-mask{position:fixed;inset:0;z-index:49;}",
-  ".dsh-utils-files-menu{position:fixed;z-index:50;min-width:150px;padding:4px;border-radius:10px;",
+  ".dsh-utils-files-menu{position:fixed;z-index:50;min-width:200px;padding:6px;border-radius:12px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-menu);",
-  "box-shadow:var(--dsw-shadow-lv3);}",
-  ".dsh-utils-files-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;",
+  "box-shadow:var(--dsw-shadow-lv3);display:flex;flex-direction:column;gap:2px;}",
+  ".dsh-utils-files-menu-item{display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;",
   "border:none;background:0 0;color:var(--dsw-alias-label-primary);font-family:inherit;",
-  "font-size:12.5px;line-height:18px;cursor:pointer;border-radius:6px;text-align:left;}",
+  "font-size:13px;line-height:18px;cursor:pointer;border-radius:8px;text-align:left;}",
   ".dsh-utils-files-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover);}",
+  ".dsh-utils-files-menu-item:active{background:var(--dsw-alias-interactive-bg-active);}",
+  ".dsh-utils-files-menu-item-icon{flex:none;width:16px;height:16px;display:block;",
+  "color:var(--dsw-alias-label-secondary);}",
+  ".dsh-utils-files-menu-item:hover .dsh-utils-files-menu-item-icon,",
+  ".dsh-utils-files-menu-item:active .dsh-utils-files-menu-item-icon{color:var(--dsw-alias-label-primary);}",
+  ".dsh-utils-files-menu-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+  ".dsh-utils-files-menu-item-hint{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary);",
+  "max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
   ".dsh-utils-files-menu-item-danger{color:var(--dsw-alias-state-error-primary);}",
-  ".dsh-utils-files-menu-item-hint{display:block;font-size:11px;color:var(--dsw-alias-label-tertiary);}",
+  ".dsh-utils-files-menu-item-danger .dsh-utils-files-menu-item-icon,",
+  ".dsh-utils-files-menu-item-danger:hover .dsh-utils-files-menu-item-icon,",
+  ".dsh-utils-files-menu-item-danger:active .dsh-utils-files-menu-item-icon{color:var(--dsw-alias-state-error-primary);}",
+  ".dsh-utils-files-menu-sep{height:1px;margin:3px 8px;background:var(--dsw-alias-border-l2);flex:none;}",
   ".dsh-utils-files-row-icon{flex:none;width:16px;display:inline-flex;align-items:center;}",
   ".dsh-utils-files-row-icon svg{width:16px;height:16px;display:block;flex:none;}",
   ".dsh-utils-files-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}",
   ".dsh-utils-files-row-size{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary);}",
   ".dsh-utils-files-hint{padding:14px;font-size:12.5px;color:var(--dsw-alias-label-tertiary);}",
   ".dsh-utils-files-error{padding:10px 14px;font-size:12.5px;color:var(--dsw-alias-state-error-primary);}",
-  ".dsh-utils-files-new{display:flex;gap:6px;padding:8px 14px 0;flex:none;}",
+  ".dsh-utils-files-new{display:flex;gap:6px;padding:8px 14px 0;flex:none;align-items:center;}",
+  ".dsh-utils-files-new-path{flex:none;max-width:140px;overflow:hidden;text-overflow:ellipsis;",
+  "white-space:nowrap;font-size:12px;color:var(--dsw-alias-label-tertiary);}",
   ".dsh-utils-files-new input{flex:1;min-width:0;height:30px;padding:0 10px;border-radius:8px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input);",
   "color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;}",
   ".dsh-utils-files-new button{height:30px;padding:0 12px;border-radius:8px;border:none;",
   "background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);",
-  "font-family:inherit;font-size:13px;cursor:pointer;}",
+  "font-family:inherit;font-size:13px;cursor:pointer;flex:none;}",
   ".dsh-utils-files-new button:hover{background:var(--dsw-alias-interactive-bg-active);}",
+  ".dsh-utils-files-new-cancel{width:30px;padding:0 !important;color:var(--dsw-alias-label-secondary) !important;}",
 ].join("\n");
 
 function interpolate(template, values) {
@@ -513,7 +564,7 @@ function FilesPanel(props) {
   const [draft, setDraft] = React.useState("");
   const [query, setQuery] = React.useState("");
   const [hits, setHits] = React.useState(null); // {query, hits, truncated} | null
-  const [creating, setCreating] = React.useState(false);
+  const [creating, setCreating] = React.useState(null); // { kind: "file"|"folder", dir: "" } | null
   const [newName, setNewName] = React.useState("");
   const [notice, setNotice] = React.useState(null); // transient status line
   const [menu, setMenu] = React.useState(null); // {x, y, path, name, isDir} | null
@@ -742,7 +793,7 @@ function FilesPanel(props) {
     removePath(path);
   };
 
-  /** Open a terminal on the host at the menu's directory. */
+  /** Open a terminal on the host at the menu's directory ('' = workspace root). */
   const menuTerminal = () => {
     if (menu === null) return;
     const path = menu.path;
@@ -756,29 +807,42 @@ function FilesPanel(props) {
       });
   };
 
-  /** Open a terminal on the host at the current workspace root. */
-  const openRootTerminal = () => {
-    Promise.resolve()
-      .then(() => api.openTerminal(root, ""))
-      .then((result) => {
-        if (!result.ok) setNotice(fmt("filesError", { message: result.error.message }));
-      }, (err) => {
-        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
-      });
+  /** Start the new-file row, targeting the menu's directory ('' = root). */
+  const menuNewFile = () => {
+    if (menu === null) return;
+    const dir = menu.path;
+    setMenu(null);
+    setCreating({ kind: "file", dir });
+    setNewName("");
   };
 
-  const createFile = () => {
+  /** Start the new-folder row, targeting the menu's directory ('' = root). */
+  const menuNewFolder = () => {
+    if (menu === null) return;
+    const dir = menu.path;
+    setMenu(null);
+    setCreating({ kind: "folder", dir });
+    setNewName("");
+  };
+
+  /** Create the pending file or folder (from the header "+" or a menu). */
+  const createEntry = () => {
     const name = newName.trim();
-    if (name === "") return;
-    const path = name.startsWith("/") ? name.slice(1) : name;
+    if (name === "" || creating === null) return;
+    const base = creating.dir === "" ? "" : creating.dir + "/";
+    const path = base + (name.startsWith("/") ? name.slice(1) : name);
+    const op = creating.kind === "folder"
+      ? api.createDir(root, path)
+      : api.write(root, path, "", undefined);
     Promise.resolve()
-      .then(() => api.write(root, path, "", undefined))
+      .then(() => op)
       .then((result) => {
         if (result.ok) {
-          setCreating(false);
+          const kind = creating.kind;
+          setCreating(null);
           setNewName("");
           loadDir(parentOf(path));
-          openFile(path);
+          if (kind === "file") openFile(path);
         } else {
           setNotice(fmt("filesError", { message: result.error.message }));
         }
@@ -1013,21 +1077,9 @@ function FilesPanel(props) {
         {
           type: "button",
           className: "dsh-utils-files-tool",
-          title: t("filesTerminalRoot"),
-          onClick: openRootTerminal,
+          title: t("filesNewFile"),
+          onClick: () => setCreating((prev) => (prev === null ? { kind: "file", dir: "" } : null)),
         },
-        React.createElement(
-          "svg",
-          { viewBox: "0 0 16 16", "aria-hidden": "true" },
-          React.createElement("path", {
-            fill: "currentColor",
-            d: "M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5Z",
-          })
-        )
-      ),
-      React.createElement(
-        "button",
-        { type: "button", className: "dsh-utils-files-tool", title: t("filesNewFile"), onClick: () => setCreating((value) => !value) },
         "+"
       ),
       React.createElement(
@@ -1052,21 +1104,39 @@ function FilesPanel(props) {
         spellCheck: false,
       })
     ),
-    creating &&
+    creating !== null &&
       React.createElement(
         "div",
         { className: "dsh-utils-files-new" },
+        creating.dir !== "" &&
+          React.createElement("span", { className: "dsh-utils-files-new-path", title: creating.dir }, creating.dir + "/"),
         React.createElement("input", {
           type: "text",
-          placeholder: t("filesNewFileName"),
+          autoFocus: true,
+          placeholder: creating.kind === "folder" ? t("filesNewFolderName") : t("filesNewFileName"),
           value: newName,
           onChange: (event) => setNewName(event.target.value),
           onKeyDown: (event) => {
-            if (event.key === "Enter") createFile();
-            if (event.key === "Escape") setCreating(false);
+            if (event.key === "Enter") createEntry();
+            if (event.key === "Escape") setCreating(null);
           },
         }),
-        React.createElement("button", { type: "button", onClick: createFile }, t("filesCreate"))
+        React.createElement(
+          "button",
+          { type: "button", onClick: createEntry },
+          creating.kind === "folder" ? t("filesCreateFolder") : t("filesCreate")
+        ),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "dsh-utils-files-new-cancel",
+            title: t("filesCancel"),
+            onClick: () => setCreating(null),
+            "aria-label": t("filesCancel"),
+          },
+          "×"
+        )
       ),
     notice !== null &&
       React.createElement("div", { className: "dsh-utils-files-hint", onClick: () => setNotice(null) }, notice),
@@ -1125,27 +1195,45 @@ function FilesPanel(props) {
           {
             className: "dsh-utils-files-menu",
             style: {
-              left: Math.min(menu.x, Math.max(0, window.innerWidth - 170)) + "px",
-              top: Math.min(menu.y, Math.max(0, window.innerHeight - 120)) + "px",
+              left: Math.min(menu.x, Math.max(0, window.innerWidth - 220)) + "px",
+              top: Math.min(menu.y, Math.max(0, window.innerHeight - 140)) + "px",
             },
             onMouseDown: (event) => event.stopPropagation(),
           },
-          (menu.path === "" || menu.isDir) &&
-            React.createElement(
-              "button",
-              { type: "button", className: "dsh-utils-files-menu-item", onClick: menuTerminal },
-              React.createElement("span", null, menu.path === "" ? t("filesTerminalRoot") : t("filesTerminal"))
-            ),
+          (menu.path === "" || menu.isDir) && [
+            menuItemView("new-file", menuNewFile, "file", true, t("filesNewFile"), menu.path === "" ? "" : menu.path),
+            menuItemView("new-folder", menuNewFolder, "folder", true, t("filesNewFolder"), menu.path === "" ? "" : menu.path),
+            menuSeparatorView("sep-create-terminal"),
+            menuItemView("terminal", menuTerminal, "terminal", false, menu.path === "" ? t("filesTerminalRoot") : t("filesTerminal")),
+          ],
+          menu.isDir && menuSeparatorView("sep-terminal-delete"),
           menu.path !== "" &&
-            React.createElement(
-              "button",
-              { type: "button", className: "dsh-utils-files-menu-item dsh-utils-files-menu-item-danger", onClick: menuDelete },
-              React.createElement("span", null, t("filesDelete")),
-              React.createElement("span", { className: "dsh-utils-files-menu-item-hint" }, fmt("filesRecycleHint", {}))
-            )
+            menuItemView("delete", menuDelete, "trash", false, t("filesDelete"), fmt("filesRecycleHint", {}), true)
         )
       )
   );
+}
+
+/** One context-menu row: icon + label + optional right-aligned hint. */
+function menuItemView(key, onClick, icon, withAdd, label, hint, danger) {
+  return React.createElement(
+    "button",
+    {
+      key,
+      type: "button",
+      className: "dsh-utils-files-menu-item" + (danger === true ? " dsh-utils-files-menu-item-danger" : ""),
+      onClick,
+    },
+    menuIcon(icon, withAdd),
+    React.createElement("span", { className: "dsh-utils-files-menu-item-label" }, label),
+    hint !== undefined && hint !== "" &&
+      React.createElement("span", { className: "dsh-utils-files-menu-item-hint" }, hint)
+  );
+}
+
+/** A thin divider between menu groups. */
+function menuSeparatorView(key) {
+  return React.createElement("div", { key, className: "dsh-utils-files-menu-sep" });
 }
 
 /** Mount the file panel as a right-side floating column of the frame grid. */
@@ -1290,6 +1378,14 @@ function apply(ctx) {
       try {
         const { filesRemote } = await remotesPromise;
         return filesRemote.write(root, rel, content, baseMtime);
+      } catch (err) {
+        return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
+      }
+    },
+    createDir: async (root, rel) => {
+      try {
+        const { filesRemote } = await remotesPromise;
+        return filesRemote.createDir(root, rel);
       } catch (err) {
         return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
       }
