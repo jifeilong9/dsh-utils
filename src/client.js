@@ -93,6 +93,7 @@ const zh = {
   filesMoved: "已移动",
   filesMoveConflict: "目标位置已存在同名文件",
   filesTerminal: "在终端中打开",
+  filesTerminalRoot: "在终端中打开工作区根目录",
   filesBinary: "二进制文件，暂不支持预览",
   filesTruncated: "（内容过长，仅显示前 200000 字符）",
   filesSaved: "已保存",
@@ -138,6 +139,7 @@ const en = {
   filesMoved: "Moved",
   filesMoveConflict: "A file with the same name already exists at the destination",
   filesTerminal: "Open in Terminal",
+  filesTerminalRoot: "Open workspace root in terminal",
   filesBinary: "Binary file, preview not supported",
   filesTruncated: "(content truncated to the first 200000 chars)",
   filesSaved: "Saved",
@@ -309,6 +311,7 @@ const STYLES = [
   ".dsh-utils-files-tool{padding:0;width:28px;height:28px;border-radius:8px;border:none;",
   "background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;line-height:28px;}",
   ".dsh-utils-files-tool:hover{background:var(--dsw-alias-interactive-bg-hover);}",
+  ".dsh-utils-files-tool svg{width:16px;height:16px;display:block;margin:6px auto;}",
   ".dsh-utils-files-search{padding:8px 14px 0;flex:none;}",
   ".dsh-utils-files-search input{width:100%;height:30px;padding:0 10px;border-radius:8px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input);",
@@ -998,6 +1001,17 @@ function FilesPanel(props) {
       });
   };
 
+  /** Open a terminal on the host at the current workspace root. */
+  const openRootTerminal = () => {
+    Promise.resolve()
+      .then(() => api.openTerminal(root, ""))
+      .then((result) => {
+        if (!result.ok) setNotice(fmt("filesError", { message: result.error.message }));
+      }, (err) => {
+        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
+      });
+  };
+
   const createFile = () => {
     const name = newName.trim();
     if (name === "") return;
@@ -1241,6 +1255,23 @@ function FilesPanel(props) {
       ),
       React.createElement(
         "button",
+        {
+          type: "button",
+          className: "dsh-utils-files-tool",
+          title: t("filesTerminalRoot"),
+          onClick: openRootTerminal,
+        },
+        React.createElement(
+          "svg",
+          { viewBox: "0 0 16 16", "aria-hidden": "true" },
+          React.createElement("path", {
+            fill: "currentColor",
+            d: "M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5Z",
+          })
+        )
+      ),
+      React.createElement(
+        "button",
         { type: "button", className: "dsh-utils-files-tool", title: t("filesNewFile"), onClick: () => setCreating((value) => !value) },
         "+"
       ),
@@ -1308,6 +1339,11 @@ function FilesPanel(props) {
             if (from === null || from === "" || parentOf(from) === "") return;
             doMove(from, "");
           },
+          // Right-clicking the empty tree area offers the workspace root.
+          onContextMenu: (event) => {
+            event.preventDefault();
+            setMenu({ x: event.clientX, y: event.clientY, path: "", name: "", isDir: true });
+          },
         },
         treeContent
       ),
@@ -1339,18 +1375,19 @@ function FilesPanel(props) {
             },
             onMouseDown: (event) => event.stopPropagation(),
           },
-          menu.isDir &&
+          (menu.path === "" || menu.isDir) &&
             React.createElement(
               "button",
               { type: "button", className: "dsh-utils-files-menu-item", onClick: menuTerminal },
-              React.createElement("span", null, t("filesTerminal"))
+              React.createElement("span", null, menu.path === "" ? t("filesTerminalRoot") : t("filesTerminal"))
             ),
-          React.createElement(
-            "button",
-            { type: "button", className: "dsh-utils-files-menu-item dsh-utils-files-menu-item-danger", onClick: menuDelete },
-            React.createElement("span", null, t("filesDelete")),
-            React.createElement("span", { className: "dsh-utils-files-menu-item-hint" }, fmt("filesRecycleHint", {}))
-          )
+          menu.path !== "" &&
+            React.createElement(
+              "button",
+              { type: "button", className: "dsh-utils-files-menu-item dsh-utils-files-menu-item-danger", onClick: menuDelete },
+              React.createElement("span", null, t("filesDelete")),
+              React.createElement("span", { className: "dsh-utils-files-menu-item-hint" }, fmt("filesRecycleHint", {}))
+            )
         )
       )
   );
