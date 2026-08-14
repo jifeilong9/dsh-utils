@@ -1,0 +1,13 @@
+{
+  "id": "dsh-utils",
+  "version": "0.2.0",
+  "main": "lib/index.js",
+  "description": "DSH web utilities: opencode usage badge and workspace file manager.",
+  "engines": {
+    "dsh": ">=0.0.1"
+  },
+  "contributes": {
+    "tools": [],
+    "skills": []
+  }
+}

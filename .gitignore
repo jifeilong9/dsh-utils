@@ -1,0 +1,20 @@
+# dependencies (dev only; not shipped)
+node_modules/
+
+# build artifacts from npm dev deps
+package-lock.json
+
+# packed tarballs
+*.tgz
+
+# local test home (contains a copy of the credentials file — never commit)
+.dsh-test-home/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
