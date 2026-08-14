@@ -21,7 +21,8 @@
 - **图片预览**：png / jpg / gif / webp / svg / ico / bmp / avif 直接预览
 - **编辑保存**：修改后保存，带 mtime 冲突保护（文件在磁盘上被改动会拒绝覆盖）
 - **新建文件 / 新建文件夹 / 删除**：右键菜单或头部"+"新建文件（输入行带取消按钮），新建文件夹可从任意文件夹右键创建；预览页或右键删除，删除前弹确认框；Windows 下移入**系统回收站**（Linux / macOS 为永久删除，host 端已注明）；拒绝操作根目录和 `.git` 路径
-- **图标右键菜单**：右键文件树空白处 / 文件夹 / 文件弹出带图标的分组菜单（新建文件、新建文件夹、在终端中打开、删除），创建类操作右侧提示目标目录
+- **图标右键菜单**：右键文件树空白处 / 文件夹 / 文件弹出带图标的分组菜单（新建文件、新建文件夹、在终端中打开、在 VS Code 中打开、删除），创建类操作右侧提示目标目录
+- **在 VS Code 中打开**：文件树空白处右键以当前工作区根目录在 VS Code 中打开（`code` CLI，缺失时回退 `code-insiders`；Windows 下经 shell 包装检测 CLI 是否可用）；`.git` 路径与工作区外路径一律拒绝
 - **拖动移动**：把文件 / 文件夹直接拖到目标文件夹上即可移动（拖到空白处移回工作区根目录；同名冲突会拒绝并提示）；目录懒加载状态自动刷新
 - **在终端中打开**：文件夹右键菜单直接打开宿主机终端并以该目录为工作目录；**文件树空白处右键**则以当前工作区根目录打开——Windows 优先 Windows Terminal（不可用时回退 `cmd`），macOS 用 Terminal.app，Linux 依次尝试 gnome-terminal / konsole / xfce4-terminal / alacritty / kitty / xterm；`.git` 路径与工作区外路径一律拒绝
 - **多工作区**：下拉切换，记住上次选择（localStorage）
@@ -33,7 +34,7 @@
 
 ```sh
 # 方式一：本地 tarball（构建产物）
-dsh plugin --profile web add ./dsh-utils-0.6.0.tgz
+dsh plugin --profile web add ./dsh-utils-0.6.1.tgz
 
 # 方式二：发布到 npm 后
 dsh plugin --profile web add dsh-utils

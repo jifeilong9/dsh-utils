@@ -75,6 +75,7 @@ const zh = {
   filesMoveConflict: "目标位置已存在同名文件",
   filesTerminal: "在终端中打开",
   filesTerminalRoot: "在终端中打开工作区根目录",
+  filesVscode: "在 VS Code 中打开",
   filesBinary: "二进制文件，暂不支持预览",
   filesTruncated: "（内容过长，仅显示前 200000 字符）",
   filesSaved: "已保存",
@@ -110,6 +111,7 @@ const en = {
   filesMoveConflict: "A file with the same name already exists at the destination",
   filesTerminal: "Open in Terminal",
   filesTerminalRoot: "Open workspace root in terminal",
+  filesVscode: "Open in VS Code",
   filesBinary: "Binary file, preview not supported",
   filesTruncated: "(content truncated to the first 200000 chars)",
   filesSaved: "Saved",
@@ -145,6 +147,7 @@ const MENU_ICON_PATHS = {
   folder: "M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z",
   plus: "M8.75 2.5a.75.75 0 0 0-1.5 0v4.75H2.5a.75.75 0 0 0 0 1.5h4.75v4.75a.75.75 0 0 0 1.5 0V8.75h4.75a.75.75 0 0 0 0-1.5H8.75V2.5Z",
   terminal: "M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15H1.75A1.75 1.75 0 0 1 0 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25ZM7.25 8a.75.75 0 0 1-.22.53l-2.25 2.25a.75.75 0 1 1-1.06-1.06L5.44 8 3.72 6.28a.75.75 0 1 1 1.06-1.06l2.25 2.25c.141.14.22.331.22.53Zm1.5 1.5a.75.75 0 0 1 0-1.5h3a.75.75 0 0 1 0 1.5Z",
+  code: "M5.06 2.53a.75.75 0 0 0-1.06-1.06l-4 4a.75.75 0 0 0 0 1.06l4 4a.75.75 0 1 0 1.06-1.06L1.81 6.5l3.25-3.25Zm5.88 0a.75.75 0 0 1 1.06-1.06l4 4a.75.75 0 0 1 0 1.06l-4 4a.75.75 0 0 1-1.06-1.06l3.25-3.25-3.25-3.25Zm-2.56-2.4a.75.75 0 0 1 .447.96l-3.5 11.5a.75.75 0 1 1-1.406-.52l3.5-11.5a.75.75 0 0 1 .96-.44Z",
   trash: "M5.5 5.5A.75.75 0 0 0 4 5.5v7a.75.75 0 0 0 1.5 0v-7Zm3.5 0a.75.75 0 0 0-1.5 0v7a.75.75 0 0 0 1.5 0v-7ZM2.5 2a.75.75 0 0 0 0 1.5H3v9.75A1.75 1.75 0 0 0 4.75 15h6.5A1.75 1.75 0 0 0 13 13.25V3.5h.5a.75.75 0 0 0 0-1.5H10.5v-1A1.75 1.75 0 0 0 8.75-.25h-1.5A1.75 1.75 0 0 0 5.5 1v1H2.5ZM7 1a.25.25 0 0 1 .25-.25h1.5A.25.25 0 0 1 9 1v1H7V1Zm4.5 2.5h-7v9.75c0 .138.112.25.25.25h6.5a.25.25 0 0 0 .25-.25V3.5Z",
 };
 
@@ -244,6 +247,16 @@ const WORKSPACE_FILES_REMOTE = {
       parameters: [jsonParam("root"), jsonParam("rel")],
       cancellation: { parameter: "signal" },
       result: { mode: "strict", typeSymbol: "dsh-utils#TerminalOpen", schema: PASS_SCHEMA },
+    },
+    {
+      id: "dsh-utils#workspaceFiles/openInVscode",
+      service: "workspaceFiles",
+      namespace: "workspaceFiles",
+      method: "openInVscode",
+      invocation: { kind: "direct" },
+      parameters: [jsonParam("root"), jsonParam("rel")],
+      cancellation: { parameter: "signal" },
+      result: { mode: "strict", typeSymbol: "dsh-utils#VscodeOpen", schema: PASS_SCHEMA },
     },
     {
       id: "dsh-utils#workspaceFiles/search",
@@ -807,6 +820,20 @@ function FilesPanel(props) {
       });
   };
 
+  /** Open the menu's directory in VS Code on the host ('' = workspace root). */
+  const menuVscode = () => {
+    if (menu === null) return;
+    const path = menu.path;
+    setMenu(null);
+    Promise.resolve()
+      .then(() => api.openInVscode(root, path))
+      .then((result) => {
+        if (!result.ok) setNotice(fmt("filesError", { message: result.error.message }));
+      }, (err) => {
+        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
+      });
+  };
+
   /** Start the new-file row, targeting the menu's directory ('' = root). */
   const menuNewFile = () => {
     if (menu === null) return;
@@ -1203,10 +1230,12 @@ function FilesPanel(props) {
           (menu.path === "" || menu.isDir) && [
             menuItemView("new-file", menuNewFile, "file", true, t("filesNewFile"), menu.path === "" ? "" : menu.path),
             menuItemView("new-folder", menuNewFolder, "folder", true, t("filesNewFolder"), menu.path === "" ? "" : menu.path),
-            menuSeparatorView("sep-create-terminal"),
+            menuSeparatorView("sep-create-open"),
             menuItemView("terminal", menuTerminal, "terminal", false, menu.path === "" ? t("filesTerminalRoot") : t("filesTerminal")),
           ],
-          menu.isDir && menuSeparatorView("sep-terminal-delete"),
+          menu.path === "" &&
+            menuItemView("vscode", menuVscode, "code", false, t("filesVscode")),
+          menu.isDir && menuSeparatorView("sep-open-delete"),
           menu.path !== "" &&
             menuItemView("delete", menuDelete, "trash", false, t("filesDelete"), fmt("filesRecycleHint", {}), true)
         )
@@ -1410,6 +1439,14 @@ function apply(ctx) {
       try {
         const { filesRemote } = await remotesPromise;
         return filesRemote.openTerminal(root, rel);
+      } catch (err) {
+        return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
+      }
+    },
+    openInVscode: async (root, rel) => {
+      try {
+        const { filesRemote } = await remotesPromise;
+        return filesRemote.openInVscode(root, rel);
       } catch (err) {
         return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
       }
