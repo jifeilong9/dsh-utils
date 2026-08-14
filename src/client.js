@@ -320,6 +320,10 @@ const STYLES = [
   "background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;line-height:28px;}",
   ".dsh-utils-files-tool:hover{background:var(--dsw-alias-interactive-bg-hover);}",
   ".dsh-utils-files-search{position:relative;padding:8px 14px 0;flex:none;}",
+  // The app's global box-sizing is content-box: without border-box, an input
+  // with width:100% + padding overflows the panel and its right side gets
+  // clipped by the column's overflow:hidden.
+  ".dsh-utils-files-col input,.dsh-utils-files-col select,.dsh-utils-files-col button{box-sizing:border-box;}",
   ".dsh-utils-files-search input{width:100%;height:30px;padding:0 30px 0 10px;border-radius:8px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input);",
   "color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;}",
@@ -1149,16 +1153,6 @@ function FilesPanel(props) {
           },
           workspaceOptions
         )
-      ),
-      React.createElement(
-        "button",
-        {
-          type: "button",
-          className: "dsh-utils-files-tool",
-          title: t("filesNewFile"),
-          onClick: () => setCreating((prev) => (prev === null ? { kind: "file", dir: "" } : null)),
-        },
-        "+"
       ),
       React.createElement(
         "button",

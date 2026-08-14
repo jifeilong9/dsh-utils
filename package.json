@@ -1,6 +1,6 @@
 {
   "name": "dsh-utils",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "DSH web utilities: workspace file manager (file tree, search, preview, edit, right-click delete to recycle bin, drag-and-drop move, open in terminal) with sidebar entry.",
   "license": "MIT",
   "type": "module",
