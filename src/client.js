@@ -88,7 +88,10 @@ const zh = {
   filesSave: "保存",
   filesCancel: "取消",
   filesDelete: "删除",
-  filesDeleteConfirm: "确定删除 {path}？",
+  filesDeleteConfirm: "确定删除 {path}？\n（将移入电脑回收站）",
+  filesRecycleHint: "将移入电脑回收站",
+  filesMoved: "已移动",
+  filesMoveConflict: "目标位置已存在同名文件",
   filesBinary: "二进制文件，暂不支持预览",
   filesTruncated: "（内容过长，仅显示前 200000 字符）",
   filesSaved: "已保存",
@@ -129,7 +132,10 @@ const en = {
   filesSave: "Save",
   filesCancel: "Cancel",
   filesDelete: "Delete",
-  filesDeleteConfirm: "Delete {path}?",
+  filesDeleteConfirm: "Delete {path}?\n(It will be moved to the recycle bin)",
+  filesRecycleHint: "Moved to the recycle bin",
+  filesMoved: "Moved",
+  filesMoveConflict: "A file with the same name already exists at the destination",
   filesBinary: "Binary file, preview not supported",
   filesTruncated: "(content truncated to the first 200000 chars)",
   filesSaved: "Saved",
@@ -228,6 +234,16 @@ const WORKSPACE_FILES_REMOTE = {
       result: { mode: "strict", typeSymbol: "dsh-utils#DeleteResult", schema: PASS_SCHEMA },
     },
     {
+      id: "dsh-utils#workspaceFiles/move",
+      service: "workspaceFiles",
+      namespace: "workspaceFiles",
+      method: "move",
+      invocation: { kind: "direct" },
+      parameters: [jsonParam("root"), jsonParam("from"), jsonParam("to")],
+      cancellation: { parameter: "signal" },
+      result: { mode: "strict", typeSymbol: "dsh-utils#MoveResult", schema: PASS_SCHEMA },
+    },
+    {
       id: "dsh-utils#workspaceFiles/search",
       service: "workspaceFiles",
       namespace: "workspaceFiles",
@@ -314,6 +330,21 @@ const STYLES = [
   ".dsh-utils-files-row:hover{background:var(--dsw-alias-interactive-bg-hover);}",
   ".dsh-utils-files-row-selected{background:var(--dsw-alias-interactive-bg-active);color:var(--dsw-alias-label-primary);}",
   ".dsh-utils-files-row-dir{color:var(--dsw-alias-label-primary);font-weight:500;}",
+  ".dsh-utils-files-row-dragover{outline:1px dashed var(--dsw-alias-border-inverted);outline-offset:-2px;",
+  "background:var(--dsw-alias-interactive-bg-active);}",
+  ".dsh-utils-files-row[draggable=\"true\"]{cursor:grab;}",
+  ".dsh-utils-files-row[draggable=\"true\"]:active{cursor:grabbing;}",
+  // context menu
+  ".dsh-utils-files-menu-mask{position:fixed;inset:0;z-index:49;}",
+  ".dsh-utils-files-menu{position:fixed;z-index:50;min-width:150px;padding:4px;border-radius:10px;",
+  "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-menu);",
+  "box-shadow:var(--dsw-shadow-lv3);}",
+  ".dsh-utils-files-menu-item{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;",
+  "border:none;background:0 0;color:var(--dsw-alias-label-primary);font-family:inherit;",
+  "font-size:12.5px;line-height:18px;cursor:pointer;border-radius:6px;text-align:left;}",
+  ".dsh-utils-files-menu-item:hover{background:var(--dsw-alias-interactive-bg-hover);}",
+  ".dsh-utils-files-menu-item-danger{color:var(--dsw-alias-state-error-primary);}",
+  ".dsh-utils-files-menu-item-hint{display:block;font-size:11px;color:var(--dsw-alias-label-tertiary);}",
   ".dsh-utils-files-row-icon{flex:none;width:16px;display:inline-flex;align-items:center;}",
   ".dsh-utils-files-row-icon svg{width:16px;height:16px;display:block;flex:none;}",
   ".dsh-utils-files-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}",
@@ -715,6 +746,9 @@ function FilesPanel(props) {
   const [creating, setCreating] = React.useState(false);
   const [newName, setNewName] = React.useState("");
   const [notice, setNotice] = React.useState(null); // transient status line
+  const [menu, setMenu] = React.useState(null); // {x, y, path, name, isDir} | null
+  const [hoverDir, setHoverDir] = React.useState(null); // drag-over folder rel
+  const dragSource = React.useRef(null); // rel path being dragged
 
   // Refs keep the loader callbacks stable across renders so effects keyed on
   // them never re-run (an unstable identity would loop list() calls).
@@ -722,6 +756,66 @@ function FilesPanel(props) {
   rootRef.current = root;
   const fmtRef = React.useRef(fmt);
   fmtRef.current = fmt;
+
+  /** Remove one path (recycle bin) after the caller confirmed. */
+  const removePath = (path) => {
+    setPreview((prev) => (prev !== null && prev.path === path ? null : prev));
+    setSelected((prev) => (prev === path ? null : prev));
+    Promise.resolve()
+      .then(() => api.remove(root, path))
+      .then((result) => {
+        if (result.ok) {
+          loadDir(parentOf(path));
+          setExpanded((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+              if (key === path || key.startsWith(path + "/")) delete next[key];
+            }
+            return next;
+          });
+          setDirs((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+              if (key === path || key.startsWith(path + "/")) delete next[key];
+            }
+            return next;
+          });
+        } else {
+          setNotice(fmt("filesError", { message: result.error.message }));
+        }
+      }, (err) => {
+        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
+      });
+  };
+
+  /** Move one path into a destination directory ('' = root); drag & drop. */
+  const doMove = (from, toDir) => {
+    if (from === "" || from === undefined) return;
+    Promise.resolve()
+      .then(() => api.move(root, from, toDir))
+      .then((result) => {
+        if (result.ok) {
+          setNotice(fmt("filesMoved", {}));
+          loadDir(parentOf(from));
+          loadDir(toDir);
+          setPreview((prev) => (prev !== null && prev.path === from ? null : prev));
+          setSelected((prev) => (prev === from ? null : prev));
+          setDirs((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+              if (key === from || key.startsWith(from + "/")) delete next[key];
+            }
+            return next;
+          });
+        } else {
+          setNotice(result.error.message.indexOf("move-conflict") !== -1
+            ? fmt("filesMoveConflict", {})
+            : fmt("filesError", { message: result.error.message }));
+        }
+      }, (err) => {
+        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
+      });
+  };
 
   const loadDir = React.useCallback((rel) => {
     const currentRoot = rootRef.current;
@@ -855,19 +949,24 @@ function FilesPanel(props) {
       confirmed = false;
     }
     if (!confirmed) return;
-    Promise.resolve()
-      .then(() => api.remove(root, path))
-      .then((result) => {
-        if (result.ok) {
-          setPreview(null);
-          setSelected(null);
-          loadDir(parentOf(path));
-        } else {
-          setNotice(fmt("filesError", { message: result.error.message }));
-        }
-      }, (err) => {
-        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
-      });
+    setPreview(null);
+    setSelected(null);
+    removePath(path);
+  };
+
+  /** Delete from the context menu (right-click on a tree row). */
+  const menuDelete = () => {
+    if (menu === null) return;
+    const path = menu.path;
+    setMenu(null);
+    let confirmed = false;
+    try {
+      confirmed = window.confirm(fmt("filesDeleteConfirm", { path }));
+    } catch (err) {
+      confirmed = false;
+    }
+    if (!confirmed) return;
+    removePath(path);
   };
 
   const createFile = () => {
@@ -942,8 +1041,43 @@ function FilesPanel(props) {
           key: rowKey,
           className: "dsh-utils-files-row" +
             (entry.isDir ? " dsh-utils-files-row-dir" : "") +
-            (selected === entry.path ? " dsh-utils-files-row-selected" : ""),
+            (selected === entry.path ? " dsh-utils-files-row-selected" : "") +
+            (hoverDir === entry.path ? " dsh-utils-files-row-dragover" : ""),
           onClick: click,
+          onContextMenu: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMenu({ x: event.clientX, y: event.clientY, path: entry.path, name: entry.name, isDir: entry.isDir });
+          },
+          draggable: true,
+          onDragStart: (event) => {
+            dragSource.current = entry.path;
+            try { event.dataTransfer.effectAllowed = "move"; } catch (err) { /* ignore */ }
+          },
+          onDragOver: (event) => {
+            if (dragSource.current === null) return;
+            event.preventDefault();
+            try { event.dataTransfer.dropEffect = "move"; } catch (err) { /* ignore */ }
+            if (entry.isDir && dragSource.current !== entry.path) setHoverDir(entry.path);
+          },
+          onDragLeave: () => {
+            setHoverDir((prev) => (prev === entry.path ? null : prev));
+          },
+          onDrop: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const from = dragSource.current;
+            dragSource.current = null;
+            setHoverDir(null);
+            if (from === null || from === entry.path) return;
+            if (entry.isDir) {
+              doMove(from, entry.path);
+            } else {
+              // Dropping onto a file moves into its parent folder.
+              const parent = parentOf(entry.path);
+              if (parent !== from) doMove(from, parent);
+            }
+          },
           title: entry.path,
           style: { paddingLeft: String(6 + depth * 14) + "px" },
         },
@@ -1122,15 +1256,66 @@ function FilesPanel(props) {
       React.createElement("div", { className: "dsh-utils-files-hint", onClick: () => setNotice(null) }, notice),
     React.createElement(
       "div",
-      { className: "dsh-utils-files-body" },
-      React.createElement("div", { className: "dsh-utils-files-tree" }, treeContent),
+      {
+        className: "dsh-utils-files-body",
+      },
+      React.createElement(
+        "div",
+        {
+          className: "dsh-utils-files-tree",
+          // Dropping on the empty tree area moves the item to the workspace root.
+          onDragOver: (event) => {
+            if (dragSource.current === null || dragSource.current === "") return;
+            event.preventDefault();
+            try { event.dataTransfer.dropEffect = "move"; } catch (err) { /* ignore */ }
+          },
+          onDrop: (event) => {
+            event.preventDefault();
+            const from = dragSource.current;
+            dragSource.current = null;
+            setHoverDir(null);
+            if (from === null || from === "") return;
+            doMove(from, "");
+          },
+        },
+        treeContent
+      ),
       React.createElement(
         "div",
         { className: "dsh-utils-files-preview" },
         previewHeader,
         previewBody
       )
-    )
+    ),
+    menu !== null &&
+      React.createElement(
+        "div",
+        {
+          className: "dsh-utils-files-menu-mask",
+          onMouseDown: () => setMenu(null),
+          onContextMenu: (event) => {
+            event.preventDefault();
+            setMenu(null);
+          },
+        },
+        React.createElement(
+          "div",
+          {
+            className: "dsh-utils-files-menu",
+            style: {
+              left: Math.min(menu.x, Math.max(0, window.innerWidth - 170)) + "px",
+              top: Math.min(menu.y, Math.max(0, window.innerHeight - 120)) + "px",
+            },
+            onMouseDown: (event) => event.stopPropagation(),
+          },
+          React.createElement(
+            "button",
+            { type: "button", className: "dsh-utils-files-menu-item dsh-utils-files-menu-item-danger", onClick: menuDelete },
+            React.createElement("span", null, t("filesDelete")),
+            React.createElement("span", { className: "dsh-utils-files-menu-item-hint" }, fmt("filesRecycleHint", {}))
+          )
+        )
+      )
   );
 }
 
@@ -1298,6 +1483,14 @@ function apply(ctx) {
       try {
         const { filesRemote } = await remotesPromise;
         return filesRemote.delete(root, rel);
+      } catch (err) {
+        return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
+      }
+    },
+    move: async (root, from, to) => {
+      try {
+        const { filesRemote } = await remotesPromise;
+        return filesRemote.move(root, from, to);
       } catch (err) {
         return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
       }
