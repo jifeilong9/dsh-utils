@@ -1,6 +1,6 @@
 {
   "name": "dsh-utils",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "DSH web utilities: opencode usage badge (rolling/weekly/monthly percent + reset countdown) next to the model selector, and a workspace file manager (file tree, search, preview, edit, right-click delete to recycle bin, drag-and-drop move) with sidebar entry.",
   "license": "MIT",
   "type": "module",

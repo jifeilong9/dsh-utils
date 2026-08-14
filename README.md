@@ -41,7 +41,7 @@
 
 ```sh
 # 方式一：本地 tarball（构建产物）
-dsh plugin --profile web add ./dsh-utils-0.4.3.tgz
+dsh plugin --profile web add ./dsh-utils-0.4.4.tgz
 
 # 方式二：发布到 npm 后
 dsh plugin --profile web add dsh-utils

@@ -791,6 +791,9 @@ function FilesPanel(props) {
   /** Move one path into a destination directory ('' = root); drag & drop. */
   const doMove = (from, toDir) => {
     if (from === "" || from === undefined) return;
+    // Already in that directory ('' = root when the source is at root):
+    // silent no-op instead of a "same destination" error.
+    if (toDir === parentOf(from)) return;
     Promise.resolve()
       .then(() => api.move(root, from, toDir))
       .then((result) => {
@@ -1071,11 +1074,12 @@ function FilesPanel(props) {
             setHoverDir(null);
             if (from === null || from === entry.path) return;
             if (entry.isDir) {
-              doMove(from, entry.path);
+              // Dropping onto the source's own parent is a no-op.
+              if (parentOf(from) !== entry.path) doMove(from, entry.path);
             } else {
               // Dropping onto a file moves into its parent folder.
               const parent = parentOf(entry.path);
-              if (parent !== from) doMove(from, parent);
+              if (parent !== from && parent !== parentOf(from)) doMove(from, parent);
             }
           },
           title: entry.path,
@@ -1274,7 +1278,8 @@ function FilesPanel(props) {
             const from = dragSource.current;
             dragSource.current = null;
             setHoverDir(null);
-            if (from === null || from === "") return;
+            // No-op when the source is already at the workspace root.
+            if (from === null || from === "" || parentOf(from) === "") return;
             doMove(from, "");
           },
         },
