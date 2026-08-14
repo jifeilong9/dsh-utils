@@ -92,6 +92,7 @@ const zh = {
   filesRecycleHint: "将移入电脑回收站",
   filesMoved: "已移动",
   filesMoveConflict: "目标位置已存在同名文件",
+  filesTerminal: "在终端中打开",
   filesBinary: "二进制文件，暂不支持预览",
   filesTruncated: "（内容过长，仅显示前 200000 字符）",
   filesSaved: "已保存",
@@ -136,6 +137,7 @@ const en = {
   filesRecycleHint: "Moved to the recycle bin",
   filesMoved: "Moved",
   filesMoveConflict: "A file with the same name already exists at the destination",
+  filesTerminal: "Open in Terminal",
   filesBinary: "Binary file, preview not supported",
   filesTruncated: "(content truncated to the first 200000 chars)",
   filesSaved: "Saved",
@@ -242,6 +244,16 @@ const WORKSPACE_FILES_REMOTE = {
       parameters: [jsonParam("root"), jsonParam("from"), jsonParam("to")],
       cancellation: { parameter: "signal" },
       result: { mode: "strict", typeSymbol: "dsh-utils#MoveResult", schema: PASS_SCHEMA },
+    },
+    {
+      id: "dsh-utils#workspaceFiles/openTerminal",
+      service: "workspaceFiles",
+      namespace: "workspaceFiles",
+      method: "openTerminal",
+      invocation: { kind: "direct" },
+      parameters: [jsonParam("root"), jsonParam("rel")],
+      cancellation: { parameter: "signal" },
+      result: { mode: "strict", typeSymbol: "dsh-utils#TerminalOpen", schema: PASS_SCHEMA },
     },
     {
       id: "dsh-utils#workspaceFiles/search",
@@ -972,6 +984,20 @@ function FilesPanel(props) {
     removePath(path);
   };
 
+  /** Open a terminal on the host at the menu's directory. */
+  const menuTerminal = () => {
+    if (menu === null) return;
+    const path = menu.path;
+    setMenu(null);
+    Promise.resolve()
+      .then(() => api.openTerminal(root, path))
+      .then((result) => {
+        if (!result.ok) setNotice(fmt("filesError", { message: result.error.message }));
+      }, (err) => {
+        setNotice(fmt("filesError", { message: String(err && err.message ? err.message : err) }));
+      });
+  };
+
   const createFile = () => {
     const name = newName.trim();
     if (name === "") return;
@@ -1313,6 +1339,12 @@ function FilesPanel(props) {
             },
             onMouseDown: (event) => event.stopPropagation(),
           },
+          menu.isDir &&
+            React.createElement(
+              "button",
+              { type: "button", className: "dsh-utils-files-menu-item", onClick: menuTerminal },
+              React.createElement("span", null, t("filesTerminal"))
+            ),
           React.createElement(
             "button",
             { type: "button", className: "dsh-utils-files-menu-item dsh-utils-files-menu-item-danger", onClick: menuDelete },
@@ -1496,6 +1528,14 @@ function apply(ctx) {
       try {
         const { filesRemote } = await remotesPromise;
         return filesRemote.move(root, from, to);
+      } catch (err) {
+        return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
+      }
+    },
+    openTerminal: async (root, rel) => {
+      try {
+        const { filesRemote } = await remotesPromise;
+        return filesRemote.openTerminal(root, rel);
       } catch (err) {
         return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
       }
