@@ -1,7 +1,7 @@
 {
   "name": "dsh-utils",
-  "version": "0.4.6",
-  "description": "DSH web utilities: opencode usage badge (rolling/weekly/monthly percent + reset countdown) next to the model selector, and a workspace file manager (file tree, search, preview, edit, right-click delete to recycle bin, drag-and-drop move) with sidebar entry.",
+  "version": "0.5.0",
+  "description": "DSH web utilities: workspace file manager (file tree, search, preview, edit, right-click delete to recycle bin, drag-and-drop move, open in terminal) with sidebar entry.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -28,19 +28,13 @@
   },
   "files": [
     "lib",
-    "examples",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
     "LICENSE"
   ],
-  "dependencies": {
-    "undici": "^8.10.0"
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-credentials": "*",
-    "@deepseek-ai/dsh-settings": "*",
     "@deepseek-ai/dsh-typert-protocol": "*",
     "@deepseek-ai/dsh-typert-registry": "*",
     "@deepseek-ai/dsh-workspace": "*",
@@ -55,12 +49,6 @@
       "optional": true
     },
     "@deepseek-ai/dsh-typert-registry": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-credentials": {
-      "optional": true
-    },
-    "@deepseek-ai/dsh-settings": {
       "optional": true
     },
     "@deepseek-ai/dsh-workspace": {
@@ -86,6 +74,3 @@
     "highlight.js": "^11.12.0"
   }
 }
-
-
-
