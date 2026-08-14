@@ -62,6 +62,10 @@ const zh = {
   filesRefresh: "刷新",
   filesClose: "关闭",
   filesSearch: "搜索文件名…",
+  filesClearSearch: "清除搜索",
+  filesSearchEmpty: "无匹配结果",
+  filesSearchTruncated: "（结果过多，仅显示前 200 条）",
+  filesSearchResults: "共 {n} 个结果",
   filesLoading: "加载中…",
   filesEmpty: "（空）",
   filesPreview: "预览",
@@ -70,11 +74,10 @@ const zh = {
   filesCancel: "取消",
   filesDelete: "删除",
   filesDeleteConfirm: "确定删除 {path}？\n（将移入电脑回收站）",
-  filesRecycleHint: "将移入电脑回收站",
+  filesRecycleHint: "移入回收站",
   filesMoved: "已移动",
   filesMoveConflict: "目标位置已存在同名文件",
   filesTerminal: "在终端中打开",
-  filesTerminalRoot: "在终端中打开工作区根目录",
   filesVscode: "在 VS Code 中打开",
   filesBinary: "二进制文件，暂不支持预览",
   filesTruncated: "（内容过长，仅显示前 200000 字符）",
@@ -98,6 +101,10 @@ const en = {
   filesRefresh: "Refresh",
   filesClose: "Close",
   filesSearch: "Search file names…",
+  filesClearSearch: "Clear search",
+  filesSearchEmpty: "No matching results",
+  filesSearchTruncated: "(too many results, showing the first 200)",
+  filesSearchResults: "{n} result(s)",
   filesLoading: "Loading…",
   filesEmpty: "(empty)",
   filesPreview: "Preview",
@@ -106,11 +113,10 @@ const en = {
   filesCancel: "Cancel",
   filesDelete: "Delete",
   filesDeleteConfirm: "Delete {path}?\n(It will be moved to the recycle bin)",
-  filesRecycleHint: "Moved to the recycle bin",
+  filesRecycleHint: "Recycle bin",
   filesMoved: "Moved",
   filesMoveConflict: "A file with the same name already exists at the destination",
   filesTerminal: "Open in Terminal",
-  filesTerminalRoot: "Open workspace root in terminal",
   filesVscode: "Open in VS Code",
   filesBinary: "Binary file, preview not supported",
   filesTruncated: "(content truncated to the first 200000 chars)",
@@ -209,6 +215,16 @@ const WORKSPACE_FILES_REMOTE = {
       result: { mode: "strict", typeSymbol: "dsh-utils#WriteResult", schema: PASS_SCHEMA },
     },
     {
+      id: "dsh-utils#workspaceFiles/createFile",
+      service: "workspaceFiles",
+      namespace: "workspaceFiles",
+      method: "createFile",
+      invocation: { kind: "direct" },
+      parameters: [jsonParam("root"), jsonParam("rel")],
+      cancellation: { parameter: "signal" },
+      result: { mode: "strict", typeSymbol: "dsh-utils#CreateFileResult", schema: PASS_SCHEMA },
+    },
+    {
       id: "dsh-utils#workspaceFiles/createDir",
       service: "workspaceFiles",
       namespace: "workspaceFiles",
@@ -303,10 +319,15 @@ const STYLES = [
   ".dsh-utils-files-tool{padding:0;width:28px;height:28px;border-radius:8px;border:none;",
   "background:0 0;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:14px;line-height:28px;}",
   ".dsh-utils-files-tool:hover{background:var(--dsw-alias-interactive-bg-hover);}",
-  ".dsh-utils-files-search{padding:8px 14px 0;flex:none;}",
-  ".dsh-utils-files-search input{width:100%;height:30px;padding:0 10px;border-radius:8px;",
+  ".dsh-utils-files-search{position:relative;padding:8px 14px 0;flex:none;}",
+  ".dsh-utils-files-search input{width:100%;height:30px;padding:0 30px 0 10px;border-radius:8px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-input);",
   "color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;}",
+  ".dsh-utils-files-search-clear{position:absolute;top:14px;right:20px;width:22px;height:22px;padding:0;",
+  "border:none;border-radius:6px;background:0 0;color:var(--dsw-alias-label-secondary);",
+  "font-size:14px;line-height:22px;cursor:pointer;font-family:inherit;}",
+  ".dsh-utils-files-search-clear:hover{background:var(--dsw-alias-interactive-bg-hover);",
+  "color:var(--dsw-alias-label-primary);}",
   ".dsh-utils-files-body{flex:1;min-height:0;display:flex;flex-direction:column;}",
   ".dsh-utils-files-tree{flex:2;min-height:120px;overflow:auto;padding:6px 4px;",
   "border-bottom:1px solid var(--dsw-alias-border-l2);}",
@@ -341,7 +362,6 @@ const STYLES = [
   ".dsh-utils-files-row[draggable=\"true\"]{cursor:grab;}",
   ".dsh-utils-files-row[draggable=\"true\"]:active{cursor:grabbing;}",
   // context menu (icon rows with group separators)
-  ".dsh-utils-files-menu-mask{position:fixed;inset:0;z-index:49;}",
   ".dsh-utils-files-menu{position:fixed;z-index:50;min-width:200px;padding:6px;border-radius:12px;",
   "border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-specific-menu);",
   "box-shadow:var(--dsw-shadow-lv3);display:flex;flex-direction:column;gap:2px;}",
@@ -581,6 +601,7 @@ function FilesPanel(props) {
   const [newName, setNewName] = React.useState("");
   const [notice, setNotice] = React.useState(null); // transient status line
   const [menu, setMenu] = React.useState(null); // {x, y, path, name, isDir} | null
+  const menuRef = React.useRef(null);
   const [hoverDir, setHoverDir] = React.useState(null); // drag-over folder rel
   const dragSource = React.useRef(null); // rel path being dragged
 
@@ -856,19 +877,21 @@ function FilesPanel(props) {
   const createEntry = () => {
     const name = newName.trim();
     if (name === "" || creating === null) return;
-    const base = creating.dir === "" ? "" : creating.dir + "/";
+    const kind = creating.kind;
+    const dir = creating.dir;
+    const base = dir === "" ? "" : dir + "/";
     const path = base + (name.startsWith("/") ? name.slice(1) : name);
-    const op = creating.kind === "folder"
+    const op = kind === "folder"
       ? api.createDir(root, path)
-      : api.write(root, path, "", undefined);
+      : api.createFile(root, path);
     Promise.resolve()
       .then(() => op)
       .then((result) => {
         if (result.ok) {
-          const kind = creating.kind;
           setCreating(null);
           setNewName("");
           loadDir(parentOf(path));
+          if (dir !== "") setExpanded((prev) => ({ ...prev, [dir]: true }));
           if (kind === "file") openFile(path);
         } else {
           setNotice(fmt("filesError", { message: result.error.message }));
@@ -902,6 +925,29 @@ function FilesPanel(props) {
       clearTimeout(timer);
     };
   }, [query, root, api]);
+
+  // Close the context menu on any interaction outside it. Document-level
+  // capture listeners (no full-screen mask) keep the triggering click's
+  // default action intact — e.g. clicking the search box right after a
+  // right-click closes the menu AND focuses the input in one click.
+  React.useEffect(() => {
+    if (menu === null) return undefined;
+    const onDown = (event) => {
+      if (menuRef.current !== null && menuRef.current.contains(event.target)) return;
+      setMenu(null);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("contextmenu", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("contextmenu", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [menu]);
 
   const searching = hits !== null;
 
@@ -991,23 +1037,28 @@ function FilesPanel(props) {
 
   const treeContent = searching
     ? (hits !== null && hits.hits.length === 0
-        ? React.createElement("div", { className: "dsh-utils-files-hint" }, fmt("filesEmpty", {}))
-        : hits !== null && hits.hits.map((hit) =>
-            React.createElement(
-              "div",
-              {
-                key: hit.path,
-                className: "dsh-utils-files-row" + (selected === hit.path ? " dsh-utils-files-row-selected" : ""),
-                onClick: () => openFile(hit.path),
-                title: hit.path,
-              },
-              React.createElement("span", {
-                className: "dsh-utils-files-row-icon",
-                dangerouslySetInnerHTML: { __html: fileIconSvg(hit.name, false, false) },
-              }),
-              React.createElement("span", { className: "dsh-utils-files-row-name" }, hit.path)
-            )
-          ))
+        ? React.createElement("div", { className: "dsh-utils-files-hint" }, fmt("filesSearchEmpty", {}))
+        : hits !== null && [
+            ...hits.hits.map((hit) =>
+              React.createElement(
+                "div",
+                {
+                  key: hit.path,
+                  className: "dsh-utils-files-row" + (selected === hit.path ? " dsh-utils-files-row-selected" : ""),
+                  onClick: () => openFile(hit.path),
+                  title: hit.path,
+                },
+                React.createElement("span", {
+                  className: "dsh-utils-files-row-icon",
+                  dangerouslySetInnerHTML: { __html: fileIconSvg(hit.name, false, false) },
+                }),
+                React.createElement("span", { className: "dsh-utils-files-row-name" }, hit.path)
+              )
+            ),
+            hits.truncated === true &&
+              React.createElement("div", { className: "dsh-utils-files-hint", key: "trunc" }, fmt("filesSearchTruncated", {})),
+            React.createElement("div", { className: "dsh-utils-files-hint", key: "count" }, fmt("filesSearchResults", { n: String(hits.hits.length) })),
+          ])
     : renderRows("", 0);
 
   const previewHeader = preview !== null && preview.path !== undefined
@@ -1128,8 +1179,30 @@ function FilesPanel(props) {
         placeholder: t("filesSearch"),
         value: query,
         onChange: (event) => setQuery(event.target.value),
+        onKeyDown: (event) => {
+          if (event.key === "Escape") {
+            setQuery("");
+            setHits(null);
+            event.currentTarget.blur();
+          }
+          if (event.key === "Enter" && hits !== null && hits.hits.length > 0) {
+            openFile(hits.hits[0].path);
+          }
+        },
         spellCheck: false,
-      })
+      }),
+      query !== "" &&
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "dsh-utils-files-search-clear",
+            title: t("filesClearSearch"),
+            "aria-label": t("filesClearSearch"),
+            onClick: () => { setQuery(""); setHits(null); },
+          },
+          "×"
+        )
     ),
     creating !== null &&
       React.createElement(
@@ -1210,35 +1283,28 @@ function FilesPanel(props) {
       React.createElement(
         "div",
         {
-          className: "dsh-utils-files-menu-mask",
-          onMouseDown: () => setMenu(null),
+          ref: menuRef,
+          className: "dsh-utils-files-menu",
+          style: {
+            left: Math.min(menu.x, Math.max(0, window.innerWidth - 220)) + "px",
+            top: Math.min(menu.y, Math.max(0, window.innerHeight - 140)) + "px",
+          },
           onContextMenu: (event) => {
             event.preventDefault();
-            setMenu(null);
+            event.stopPropagation();
           },
         },
-        React.createElement(
-          "div",
-          {
-            className: "dsh-utils-files-menu",
-            style: {
-              left: Math.min(menu.x, Math.max(0, window.innerWidth - 220)) + "px",
-              top: Math.min(menu.y, Math.max(0, window.innerHeight - 140)) + "px",
-            },
-            onMouseDown: (event) => event.stopPropagation(),
-          },
-          (menu.path === "" || menu.isDir) && [
-            menuItemView("new-file", menuNewFile, "file", true, t("filesNewFile"), menu.path === "" ? "" : menu.path),
-            menuItemView("new-folder", menuNewFolder, "folder", true, t("filesNewFolder"), menu.path === "" ? "" : menu.path),
-            menuSeparatorView("sep-create-open"),
-            menuItemView("terminal", menuTerminal, "terminal", false, menu.path === "" ? t("filesTerminalRoot") : t("filesTerminal")),
-          ],
-          menu.path === "" &&
-            menuItemView("vscode", menuVscode, "code", false, t("filesVscode")),
-          menu.isDir && menuSeparatorView("sep-open-delete"),
-          menu.path !== "" &&
-            menuItemView("delete", menuDelete, "trash", false, t("filesDelete"), fmt("filesRecycleHint", {}), true)
-        )
+        (menu.path === "" || menu.isDir) && [
+          menuItemView("new-file", menuNewFile, "file", true, t("filesNewFile"), menu.path === "" ? "" : menu.path),
+          menuItemView("new-folder", menuNewFolder, "folder", true, t("filesNewFolder"), menu.path === "" ? "" : menu.path),
+          menuSeparatorView("sep-create-open"),
+          menuItemView("terminal", menuTerminal, "terminal", false, t("filesTerminal")),
+        ],
+        menu.path === "" &&
+          menuItemView("vscode", menuVscode, "code", false, t("filesVscode")),
+        menu.isDir && menuSeparatorView("sep-open-delete"),
+        menu.path !== "" &&
+          menuItemView("delete", menuDelete, "trash", false, t("filesDelete"), fmt("filesRecycleHint", {}), true)
       )
   );
 }
@@ -1407,6 +1473,14 @@ function apply(ctx) {
       try {
         const { filesRemote } = await remotesPromise;
         return filesRemote.write(root, rel, content, baseMtime);
+      } catch (err) {
+        return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
+      }
+    },
+    createFile: async (root, rel) => {
+      try {
+        const { filesRemote } = await remotesPromise;
+        return filesRemote.createFile(root, rel);
       } catch (err) {
         return { ok: false, error: { code: "MOUNT_FAILED", message: String(err && err.message ? err.message : err) } };
       }
