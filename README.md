@@ -73,6 +73,26 @@ dsh plugin --profile web add dsh-utils
     endpoint: https://opencode.ai/zen/go/v1/usage  # 可选：默认即此地址
 ```
 
+### 单独使用用量查询
+
+不想装插件也可以直接用 `examples/opencode-usage.mjs`（零依赖，Node.js 18+，内置 fetch）：
+
+```sh
+node examples/opencode-usage.mjs --key <你的 key>
+OPENCODE_GO_API_KEY=<你的 key> node examples/opencode-usage.mjs --json
+```
+
+输出示例：
+
+```
+opencode go 用量报告
+rolling   5%   重置于 2026-08-14T08:17:35.587Z（28分钟后）
+weekly    8%   重置于 2026-08-17T00:00:00.587Z（2天16小时后）
+monthly   4%   重置于 2026-09-12T02:12:28.587Z（28天18小时后）
+```
+
+也可以作为库 import：`fetchUsageReport(apiKey)` 返回 `{ rolling, weekly, monthly }` 三个时间窗（各含 `status` / `percent` / `resetsAt`），带 3 次重试 + 30s 超时与结构校验。
+
 ---
 
 ## 开发与构建

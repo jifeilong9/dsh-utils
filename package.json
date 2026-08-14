@@ -28,6 +28,7 @@
   },
   "files": [
     "lib",
+    "examples",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
